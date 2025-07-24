@@ -68,7 +68,31 @@ func (r RequestPayload) ExecuteImageFluxAPI() ([]byte, error) {
 
 	return respBody, nil
 }
+func parseURL(soraURL string) (string, error) {
+	// Remove protocol (e.g., wss://)
+	withoutProto := soraURL
+	if idx := len("wss://"); len(soraURL) > idx && soraURL[:idx] == "wss://" {
+		withoutProto = soraURL[idx:]
+	} else if idx := len("https://"); len(soraURL) > idx && soraURL[:idx] == "https://" {
+		withoutProto = soraURL[idx:]
+	}
+	// Extract host (up to first slash or end)
+	host := withoutProto
+	if idx := indexOf(host, '/'); idx != -1 {
+		host = host[:idx]
+	}
+	return host, nil
+}
 
+// indexOf returns the index of the first occurrence of sep in s, or -1 if not found.
+func indexOf(s string, sep byte) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == sep {
+			return i
+		}
+	}
+	return -1
+}
 func main() {
 	client, err := goobs.New("100.64.0.2:4455", goobs.WithPassword("xJuyzf0Mds4Pjs6b"))
 	if err != nil {
@@ -168,6 +192,13 @@ func main() {
 	if token == "" {
 		panic("Channel ID is empty in the response")
 	}
+	// Extract host from SoraURL
+	soraURL := createChannelResponse.SoraURL
+	parsedURL, err := parseURL(soraURL)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to parse SoraURL: %v", err))
+	}
+
 	version, err := client.General.GetVersion()
 	if err != nil {
 		panic(err)
@@ -176,7 +207,7 @@ func main() {
 	res, err := client.Config.SetStreamServiceSettings(&config.SetStreamServiceSettingsParams{
 		StreamServiceType: &WHIP,
 		StreamServiceSettings: &typedefs.StreamServiceSettings{
-			Server: "https://live-sora002.imageflux.jp/whip/" + token,
+			Server: "https://" + parsedURL + "/whip/" + token,
 		},
 	})
 	if err != nil {
