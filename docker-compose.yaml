@@ -1,0 +1,6 @@
+services:
+  streamer:
+    build: .
+    env_file: .env.local
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
