@@ -14,6 +14,9 @@ import (
 	"github.com/andreykaipov/goobs/api/typedefs"
 )
 
+var url = os.Getenv("OBS_WEBSOCKET_URL")
+var password = os.Getenv("OBS_WEBSOCKET_PASSWORD")
+
 type CreateMultiStreamChannelRequest struct {
 	HLS             []HlsConfig `json:"hls"`
 	EncryptKeyUri   string      `json:"encrypt_key_uri"`
@@ -94,7 +97,7 @@ func indexOf(s string, sep byte) int {
 	return -1
 }
 func main() {
-	client, err := goobs.New("100.64.0.2:4455", goobs.WithPassword("xJuyzf0Mds4Pjs6b"))
+	client, err := goobs.New(url, goobs.WithPassword(password))
 	if err != nil {
 		panic(err)
 	}
