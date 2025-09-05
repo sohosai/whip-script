@@ -2,13 +2,16 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/andreykaipov/goobs"
-	"github.com/andreykaipov/goobs/api/requests/config"
+	obsconfig "github.com/andreykaipov/goobs/api/requests/config"
 	"github.com/andreykaipov/goobs/api/requests/stream"
 	"github.com/andreykaipov/goobs/api/typedefs"
 	"github.com/sohosai/whip-script/internal/channel"
+	"github.com/sohosai/whip-script/internal/core"
+	"github.com/urfave/cli/v2"
 )
 
 var url = os.Getenv("OBS_WEBSOCKET_URL")
@@ -40,51 +43,94 @@ func indexOf(s string, sep byte) int {
 }
 
 func main() {
+	cfg := &core.Config{}
+	patliteEnabled := true
+
+	app := &cli.App{
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "config",
+				Aliases: []string{"c"},
+				Value:   "config.toml",
+				Usage:   "Load configuration from `FILE`",
+			},
+			&cli.BoolFlag{
+				Name:  "nolog",
+				Usage: "Disable logging",
+			},
+			&cli.BoolFlag{
+				Name:  "nolite",
+				Usage: "Disable patlite",
+			},
+		},
+		Action: func(c *cli.Context) error {
+			if configPath := c.String("config"); configPath != "" {
+				loaded, err := core.LoadConfig(configPath)
+				if err != nil {
+					core.ErrorLog("Failed to load config file: ", err.Error())
+					return err
+				}
+				cfg = loaded
+			}
+
+			if c.Bool("nolog") {
+				core.Log_enable = false
+			}
+			if c.Bool("nolite") {
+				patliteEnabled = false
+			}
+			return nil
+		},
+	}
+
+	if err := app.Run(os.Args); err != nil {
+		log.Fatal(err)
+	}
+
+	_ = patliteEnabled
+
 	client, err := goobs.New(url, goobs.WithPassword(password))
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	defer client.Disconnect()
-	var key = os.Getenv("IMAGE_FLUX_AUTH_KEY")
+
+	key := cfg.Imageflux.Token
 	if key == "" {
-		panic("IMAGE_FLUX_AUTH_KEY environment variable is not set")
+		log.Fatal("ImageFlux token is empty")
 	}
 
-	imagefluxCfg := channel.DefaultImagefluxConfig("", "")
-
-	ChannelId, soraURL := channel.CreateChannels(imagefluxCfg, key)
+	ChannelId, soraURL := channel.CreateChannels(cfg.Imageflux, key)
 	if ChannelId == "" {
-		panic("Channel ID is empty in the response")
+		log.Fatal("channel ID is empty in the response")
 	}
 
-	// Extract host from SoraURL
 	parsedURL, err := parseURL(soraURL)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to parse SoraURL: %v", err))
+		log.Fatalf("failed to parse SoraURL: %v", err)
 	}
 
 	WHIP := string("whip_custom")
-	res, err := client.Config.SetStreamServiceSettings(&config.SetStreamServiceSettingsParams{
+	res, err := client.Config.SetStreamServiceSettings(&obsconfig.SetStreamServiceSettingsParams{
 		StreamServiceType: &WHIP,
 		StreamServiceSettings: &typedefs.StreamServiceSettings{
 			Server: "https://" + parsedURL + "/whip/" + ChannelId,
 		},
 	})
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	fmt.Printf("SetStreamServiceSettings response: %+v\n", res)
 
 	res2, err := client.Stream.StartStream(&stream.StartStreamParams{})
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
-
 	fmt.Printf("StartStream response: %+v\n", res2)
 
 	m3u8Url, err := channel.GetPlaylist(ChannelId, key)
 	if err != nil {
-		panic(fmt.Errorf("failed to get Playlist: %w", err))
+		log.Fatalf("failed to get Playlist: %v", err)
 	}
 	fmt.Printf("HLS playlist URL: %s\n", m3u8Url)
 }

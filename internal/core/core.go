@@ -4,12 +4,22 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/BurntSushi/toml"
 )
 
 type RequestPayload struct {
 	Target     string
 	Body       io.Reader
 	Auth_token string
+}
+
+func LoadConfig(filepath string) (*Config, error) {
+	config := &Config{}
+	if _, err := toml.DecodeFile(filepath, config); err != nil {
+		return nil, err
+	}
+	return config, nil
 }
 
 func (r RequestPayload) ExecuteImageFluxAPI() ([]byte, error) {
