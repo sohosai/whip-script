@@ -1,4 +1,4 @@
-module github.com/whatacotton/momo-script-2.0
+module github.com/sohosai/whip-script
 
 go 1.23.0
 
