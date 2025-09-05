@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/andreykaipov/goobs"
 	"github.com/andreykaipov/goobs/api/requests/config"
@@ -46,6 +47,18 @@ type HlsConfig struct {
 	Archive struct {
 		ArchiveDestinationId string `json:"archive_destination_id" toml:"archive_destination_id"`
 	} `json:"archive" toml:"archive"`
+}
+
+type ListPlaylistURLsReq struct {
+	ChannelID string `json:"channel_id"`
+}
+
+type ListPlaylistURLsResp struct {
+	ChannelID string `json:"channel_id"`
+	HLS       []struct {
+		ConnectionID string `json:"connection_id"`
+		PlaylistURL  string `json:"playlist_url"`
+	} `json:"hls"`
 }
 
 func (r RequestPayload) ExecuteImageFluxAPI() ([]byte, error) {
@@ -96,6 +109,50 @@ func indexOf(s string, sep byte) int {
 	}
 	return -1
 }
+
+func pickLatestURL(resp ListPlaylistURLsResp) (string, bool) {
+	if len(resp.HLS) == 0 {
+		return "", false
+	}
+	if resp.HLS[0].PlaylistURL == "" {
+		return "", false
+	}
+	return resp.HLS[0].PlaylistURL, true
+}
+
+func GetPlaylist(channelID, token string) (string, error) {
+	start := time.Now()
+	timeout := 30 * time.Second
+	backoff := 2 * time.Second
+
+	for {
+		if time.Since(start) > timeout {
+			return "", fmt.Errorf("failed to get m3u8 TIMEOUT")
+		}
+
+		reqBody, _ := json.Marshal(map[string]string{"channel_id": channelID})
+		rp := RequestPayload{
+			Target:     "ImageFlux_20200207.ListPlaylistURLs",
+			Body:       bytes.NewBuffer(reqBody),
+			Auth_token: token,
+		}
+		body, err := rp.ExecuteImageFluxAPI()
+		if err == nil {
+			var resp ListPlaylistURLsResp
+			if err := json.Unmarshal(body, &resp); err == nil {
+				if u, ok := pickLatestURL(resp); ok {
+					return u, nil
+				}
+			}
+		}
+
+		time.Sleep(backoff)
+		if backoff < 3*time.Second {
+			backoff += 1 * time.Second
+		}
+	}
+}
+
 func main() {
 	client, err := goobs.New(url, goobs.WithPassword(password))
 	if err != nil {
@@ -222,7 +279,15 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
 	fmt.Printf("StartStream response: %+v\n", res2)
+
+	m3u8Url, err := GetPlaylist(token, key)
+	if err != nil {
+		panic(fmt.Errorf("failed to get Playlist: %w", err))
+	}
+	fmt.Printf("HLS playlist URL: %s\n", m3u8Url)
+
 	fmt.Printf("OBS Studio version: %s\n", version.ObsVersion)
 	fmt.Printf("Server protocol version: %s\n", version.ObsWebSocketVersion)
 	fmt.Printf("Client protocol version: %s\n", goobs.ProtocolVersion)
