@@ -10,6 +10,7 @@ import (
 	"github.com/andreykaipov/goobs/api/requests/stream"
 	"github.com/andreykaipov/goobs/api/typedefs"
 	"github.com/sohosai/whip-script/internal/channel"
+	"github.com/sohosai/whip-script/internal/cloudflare"
 	"github.com/sohosai/whip-script/internal/core"
 	"github.com/urfave/cli/v2"
 )
@@ -43,10 +44,10 @@ func indexOf(s string, sep byte) int {
 }
 
 func main() {
-	cfg := &core.Config{}
+	config := &core.Config{}
 	patliteEnabled := true
 
-	app := &cli.App{
+	cliApp := &cli.App{
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "config",
@@ -70,7 +71,7 @@ func main() {
 					core.ErrorLog("Failed to load config file: ", err.Error())
 					return err
 				}
-				cfg = loaded
+				config = loaded
 			}
 
 			if c.Bool("nolog") {
@@ -83,7 +84,7 @@ func main() {
 		},
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	if err := cliApp.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}
 
@@ -95,12 +96,12 @@ func main() {
 	}
 	defer client.Disconnect()
 
-	key := cfg.Imageflux.Token
+	key := config.Imageflux.Token
 	if key == "" {
 		log.Fatal("ImageFlux token is empty")
 	}
 
-	ChannelId, soraURL := channel.CreateChannels(cfg.Imageflux, key)
+	ChannelId, soraURL := channel.CreateChannels(config.Imageflux, key)
 	if ChannelId == "" {
 		log.Fatal("channel ID is empty in the response")
 	}
@@ -132,5 +133,29 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to get Playlist: %v", err)
 	}
-	fmt.Printf("HLS playlist URL: %s\n", m3u8Url)
+
+	err = cloudflare.PutKv(os.Getenv("HLS_VALUE_PREFIX"), m3u8Url, config)
+	if err != nil {
+		core.ErrorLog(err.Error())
+		return
+	}
+	core.Log("m3u8 URLをKVに送信しました。\n")
+	key, indexURL, err := cloudflare.GetKey(m3u8Url, config.Imageflux.Token)
+	_ = indexURL
+	if err != nil {
+		core.ErrorLog(err.Error())
+		return
+	}
+	if key == "" {
+		core.ErrorLog("暗号鍵がプレイリストから取得できませんでした。")
+		return
+	}
+	err = cloudflare.PutKv(os.Getenv("HLS_KEY_PREFIX"), key, config)
+	if err != nil {
+		core.ErrorLog(err.Error())
+		return
+	}
+
+	core.Log("encryption KeyをKVに送信しました。\n")
+	core.Log("セットアップが終了しました。\n")
 }
