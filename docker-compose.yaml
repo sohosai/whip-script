@@ -6,3 +6,4 @@ services:
       - "host.docker.internal:host-gateway"
     volumes: 
       - ./config.toml:/app/config.toml:ro
+      - ./keys.json:/app/keys.json

@@ -157,5 +157,12 @@ func main() {
 	}
 
 	core.Log("encryption KeyをKVに送信しました。\n")
+
+	if err := core.BackupKey("keys.json", ChannelId, key); err != nil {
+		core.ErrorLog("failed to write key backup: ", err.Error())
+	} else {
+		core.Log("encryption Keyをローカルバックアップ(keys.json)に保存しました。\n")
+	}
+
 	core.Log("セットアップが終了しました。\n")
 }

@@ -3,3 +3,7 @@
 .env.local
 
 config.toml
+
+.DS_Store
+
+keys.json
