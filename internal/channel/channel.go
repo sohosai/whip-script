@@ -22,6 +22,10 @@ type CreateChannelResponse struct {
 	Error     string `json:"error,omitempty"`
 }
 
+type DeleteChannelRequest struct {
+	ChannelID string `json:"channel_id"`
+}
+
 type ListPlaylistURLsReq struct {
 	ChannelID string `json:"channel_id"`
 }
@@ -128,6 +132,53 @@ func CreateChannels(i core.ImagefluxConfig, reqtoken string) (ChannelId string, 
 	`, createChannelResponse.ChannelID, createChannelResponse.SoraURL))
 	return createChannelResponse.ChannelID, createChannelResponse.SoraURL
 
+}
+
+func DeleteChannel(reqtoken string, channelID string) error {
+	if channelID == "" {
+		return fmt.Errorf("channel ID is empty")
+	}
+	deleteChannelRequest := DeleteChannelRequest{
+		ChannelID: channelID,
+	}
+
+	reqBody, err := json.Marshal(deleteChannelRequest)
+	if err != nil {
+		panic(err)
+	}
+
+	r := core.RequestPayload{
+		Target:     "ImageFlux_20180501.DeleteChannel",
+		Body:       bytes.NewBuffer(reqBody),
+		Auth_token: reqtoken,
+	}
+
+	body, err := r.ExecuteImageFluxAPI()
+	if err != nil {
+		return err
+	}
+
+	if len(bytes.TrimSpace(body)) == 0 {
+		core.Log("チャンネルを削除しました。\n")
+		return nil
+	}
+
+	var resp struct {
+		Ok    bool   `json:"ok"`
+		Error string `json:"error,omitempty"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return fmt.Errorf("failed to parse delete channel response: %w", err)
+	}
+	if !resp.Ok {
+		if resp.Error != "" {
+			return fmt.Errorf("delete channel failed: %s", resp.Error)
+		}
+		return fmt.Errorf("delete channel failed: response=%s", string(body))
+	}
+
+	core.Log("チャンネルを削除しました。\n")
+	return nil
 }
 
 func DefaultImagefluxConfig(encryptKeyUri, webhookURL string) core.ImagefluxConfig {

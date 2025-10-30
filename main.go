@@ -96,12 +96,12 @@ func main() {
 	}
 	defer client.Disconnect()
 
-	key := config.Imageflux.Token
-	if key == "" {
+	imagefluxToken := config.Imageflux.Token
+	if imagefluxToken == "" {
 		log.Fatal("ImageFlux token is empty")
 	}
 
-	ChannelId, soraURL := channel.CreateChannels(config.Imageflux, key)
+	ChannelId, soraURL := channel.CreateChannels(config.Imageflux, imagefluxToken)
 	if ChannelId == "" {
 		log.Fatal("channel ID is empty in the response")
 	}
@@ -129,7 +129,7 @@ func main() {
 	}
 	fmt.Printf("StartStream response: %+v\n", res2)
 
-	m3u8Url, err := channel.GetPlaylist(ChannelId, key)
+	m3u8Url, err := channel.GetPlaylist(ChannelId, imagefluxToken)
 	if err != nil {
 		log.Fatalf("failed to get Playlist: %v", err)
 	}
@@ -140,17 +140,17 @@ func main() {
 		return
 	}
 	core.Log("m3u8 URLをKVに送信しました。\n")
-	key, indexURL, err := cloudflare.GetKey(m3u8Url, config.Imageflux.Token)
+	encryptionKey, indexURL, err := cloudflare.GetKey(m3u8Url, imagefluxToken)
 	_ = indexURL
 	if err != nil {
 		core.ErrorLog(err.Error())
 		return
 	}
-	if key == "" {
+	if encryptionKey == "" {
 		core.ErrorLog("暗号鍵がプレイリストから取得できませんでした。")
 		return
 	}
-	err = cloudflare.PutKv(os.Getenv("HLS_KEY_PREFIX"), key, config)
+	err = cloudflare.PutKv(os.Getenv("HLS_KEY_PREFIX"), encryptionKey, config)
 	if err != nil {
 		core.ErrorLog(err.Error())
 		return
@@ -158,7 +158,18 @@ func main() {
 
 	core.Log("encryption KeyをKVに送信しました。\n")
 
-	if err := core.BackupKey("keys.json", ChannelId, key); err != nil {
+	prev, err := core.ReadKeyBackup("keys.json")
+	if err != nil {
+		core.ErrorLog("キー履歴の読み込みに失敗しました: ", err.Error())
+	} else if prev != nil && prev.ChannelID != "" {
+		if err := channel.DeleteChannel(imagefluxToken, prev.ChannelID); err != nil {
+			core.ErrorLog("前回チャンネルの削除に失敗しました: ", err.Error())
+		} else {
+			core.Log("前回チャンネルを削除しました。\n")
+		}
+	}
+
+	if err := core.BackupKey("keys.json", ChannelId, encryptionKey); err != nil {
 		core.ErrorLog("failed to write key backup: ", err.Error())
 	} else {
 		core.Log("encryption Keyをローカルバックアップ(keys.json)に保存しました。\n")
