@@ -4,6 +4,7 @@ type Config struct {
 	Imageflux  ImagefluxConfig  `toml:"imageflux"`
 	Cloudflare CloudflareConfig `toml:"cloudflare"`
 	Patlite    PatliteConfig    `toml:"patlite"`
+	Firebase   FirebaseConfig   `toml:"firebase"`
 }
 
 type ImagefluxConfig struct {
@@ -55,4 +56,8 @@ type ListChannelResponse struct {
 
 type PatliteConfig struct {
 	IP string `toml:"IP"`
+}
+
+type FirebaseConfig struct {
+	CredentialPath string `toml:"credentialpath"`
 }

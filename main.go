@@ -1,18 +1,24 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 
+	gfirestore "cloud.google.com/go/firestore"
+	firebase "firebase.google.com/go"
 	"github.com/andreykaipov/goobs"
 	obsconfig "github.com/andreykaipov/goobs/api/requests/config"
 	"github.com/andreykaipov/goobs/api/requests/stream"
 	"github.com/andreykaipov/goobs/api/typedefs"
 	"github.com/sohosai/whip-script/internal/channel"
-	"github.com/sohosai/whip-script/internal/cloudflare"
+
+	// "github.com/sohosai/whip-script/internal/cloudflare"
 	"github.com/sohosai/whip-script/internal/core"
+	firestore "github.com/sohosai/whip-script/internal/firestore"
 	"github.com/urfave/cli/v2"
+	"google.golang.org/api/option"
 )
 
 var url = os.Getenv("OBS_WEBSOCKET_URL")
@@ -41,6 +47,30 @@ func indexOf(s string, sep byte) int {
 		}
 	}
 	return -1
+}
+
+func initFirestore(ctx context.Context, credentialPath string) (*gfirestore.Client, func(), error) {
+	if credentialPath == "" {
+		return nil, nil, fmt.Errorf("firebase credential path is empty")
+	}
+
+	sa := option.WithCredentialsFile(credentialPath)
+
+	app, err := firebase.NewApp(ctx, nil, sa)
+	if err != nil {
+		return nil, nil, fmt.Errorf("init firebase app: %w", err)
+	}
+
+	client, err := app.Firestore(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("init firestore client: %w", err)
+	}
+
+	cleanup := func() {
+		client.Close()
+	}
+
+	return client, cleanup, nil
 }
 
 func main() {
@@ -88,6 +118,14 @@ func main() {
 		log.Fatal(err)
 	}
 
+	ctx := context.Background()
+	fsClient, fsCleanup, err := initFirestore(ctx, config.Firebase.CredentialPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer fsCleanup()
+	firestore.SetClient(fsClient)
+
 	_ = patliteEnabled
 
 	client, err := goobs.New(url, goobs.WithPassword(password))
@@ -134,13 +172,17 @@ func main() {
 		log.Fatalf("failed to get Playlist: %v", err)
 	}
 
-	err = cloudflare.PutKv(os.Getenv("HLS_VALUE_PREFIX"), m3u8Url, config)
+	firestore.Write(m3u8Url, os.Getenv("HLS_VALUE_PREFIX"))
+	core.Log("m3u8URLをfirestoreに送信しました。")
+
+	/* err = cloudflare.PutKv(os.Getenv("HLS_VALUE_PREFIX"), m3u8Url, config)
 	if err != nil {
 		core.ErrorLog(err.Error())
 		return
 	}
-	core.Log("m3u8 URLをKVに送信しました。\n")
-	encryptionKey, indexURL, err := cloudflare.GetKey(m3u8Url, imagefluxToken)
+	core.Log("m3u8 URLをKVに送信しました。\n") */
+
+	encryptionKey, indexURL, err := channel.GetKey(m3u8Url, imagefluxToken)
 	_ = indexURL
 	if err != nil {
 		core.ErrorLog(err.Error())
@@ -150,13 +192,18 @@ func main() {
 		core.ErrorLog("暗号鍵がプレイリストから取得できませんでした。")
 		return
 	}
-	err = cloudflare.PutKv(os.Getenv("HLS_KEY_PREFIX"), encryptionKey, config)
+	/* err = cloudflare.PutKv(os.Getenv("HLS_KEY_PREFIX"), encryptionKey, config)
 	if err != nil {
 		core.ErrorLog(err.Error())
 		return
 	}
 
-	core.Log("encryption KeyをKVに送信しました。\n")
+	firestore.Write(, os.Getenv("HLS_VALUE_PREFIX"))
+
+	core.Log("encryption KeyをKVに送信しました。\n")*/
+
+	firestore.Write(encryptionKey, os.Getenv("HLS_KEY_PREFIX"))
+	core.Log("encryption Keyをfirestoreに送信しました。")
 
 	prev, err := core.ReadKeyBackup("keys.json")
 	if err != nil {
