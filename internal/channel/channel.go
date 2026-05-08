@@ -32,6 +32,8 @@ type ListPlaylistURLsReq struct {
 
 type ListPlaylistURLsResp struct {
 	ChannelID string `json:"channel_id"`
+	Ok        bool   `json:"ok,omitempty"`
+	Error     string `json:"error,omitempty"`
 	HLS       []struct {
 		ConnectionID string `json:"connection_id"`
 		PlaylistURL  string `json:"playlist_url"`
@@ -39,44 +41,60 @@ type ListPlaylistURLsResp struct {
 }
 
 func pickLatestURL(resp ListPlaylistURLsResp) (string, bool) {
-	if len(resp.HLS) == 0 {
-		return "", false
+	for _, hls := range resp.HLS {
+		if hls.PlaylistURL != "" {
+			return hls.PlaylistURL, true
+		}
 	}
-	if resp.HLS[0].PlaylistURL == "" {
-		return "", false
-	}
-	return resp.HLS[0].PlaylistURL, true
+	return "", false
 }
 
 func GetPlaylist(channelID, token string) (string, error) {
+	if channelID == "" {
+		return "", fmt.Errorf("channel ID is empty")
+	}
+	if token == "" {
+		return "", fmt.Errorf("imageflux token is empty")
+	}
+
 	start := time.Now()
 	timeout := 30 * time.Second
 	backoff := 2 * time.Second
+	lastErr := "playlist URL is still empty"
 
 	for {
 		if time.Since(start) > timeout {
-			return "", fmt.Errorf("failed to get m3u8 TIMEOUT")
+			return "", fmt.Errorf("failed to get m3u8 TIMEOUT after %s: %s", timeout, lastErr)
 		}
 
-		reqBody, _ := json.Marshal(map[string]string{"channel_id": channelID})
+		reqBody, err := json.Marshal(ListPlaylistURLsReq{ChannelID: channelID})
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal ListPlaylistURLs request: %w", err)
+		}
 		rp := core.RequestPayload{
 			Target:     "ImageFlux_20200207.ListPlaylistURLs",
 			Body:       bytes.NewBuffer(reqBody),
 			Auth_token: token,
 		}
 		body, err := rp.ExecuteImageFluxAPI()
-		if err == nil {
+		if err != nil {
+			lastErr = fmt.Sprintf("ListPlaylistURLs request failed: %v", err)
+		} else {
 			var resp ListPlaylistURLsResp
-			if err := json.Unmarshal(body, &resp); err == nil {
-				if u, ok := pickLatestURL(resp); ok {
-					core.Log(fmt.Sprintf(`
+			if err := json.Unmarshal(body, &resp); err != nil {
+				lastErr = fmt.Sprintf("failed to parse ListPlaylistURLs response: %v body=%s", err, string(body))
+			} else if resp.Error != "" {
+				lastErr = fmt.Sprintf("ListPlaylistURLs returned error: %s", resp.Error)
+			} else if u, ok := pickLatestURL(resp); ok {
+				core.Log(fmt.Sprintf(`
 		プレイリストの取得に成功しました〜〜
 		****************************************************
 		HLS Playlist URL: %s,
 		****************************************************
 		`, u))
-					return u, nil
-				}
+				return u, nil
+			} else {
+				lastErr = fmt.Sprintf("playlist_url is empty (hls entries=%d)", len(resp.HLS))
 			}
 		}
 

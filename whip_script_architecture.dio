@@ -1,0 +1,85 @@
+<mxfile host="Electron" modified="2026-05-06T12:00:00.000Z" agent="Antigravity" version="22.0.4" type="device">
+  <diagram id="whip-script" name="Architecture">
+    <mxGraphModel dx="1000" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Nodes -->
+        <mxCell id="main" value="main.go&#10;(Entry Point)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="350" y="50" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="channel" value="internal/channel&#10;(channel.go)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="150" y="200" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cloudflare" value="internal/cloudflare&#10;(cloudflare.go)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="550" y="200" width="140" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="core" value="internal/core&#10;(core.go, log.go, models.go)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="350" y="350" width="160" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="goobs" value="goobs&#10;(OBS WebSocket)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="50" y="50" width="120" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="keysjson" value="keys.json&#10;(Local Backup)" style="shape=document;whiteSpace=wrap;html=1;boundedLbl=1;" vertex="1" parent="1">
+          <mxGeometry x="650" y="350" width="120" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="imageflux" value="ImageFlux API" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="350" y="520" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="kv" value="Cloudflare KV" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="780" y="190" width="140" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Edges -->
+        <mxCell id="edge_main_channel" value="CreateChannels()&#10;GetPlaylist()&#10;DeleteChannel()" style="endArrow=classic;html=1;exitX=0.25;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="main" target="channel">
+          <mxGeometry width="50" height="50" relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge_main_cloudflare" value="PutKv()&#10;GetKey()" style="endArrow=classic;html=1;exitX=0.75;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="main" target="cloudflare">
+          <mxGeometry width="50" height="50" relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge_main_core" value="LoadConfig()&#10;BackupKey()&#10;ReadKeyBackup()" style="endArrow=classic;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="main" target="core">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="420" y="150" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="edge_main_goobs" value="Connect / Setup" style="endArrow=classic;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="main" target="goobs">
+          <mxGeometry width="50" height="50" relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge_channel_core" value="ExecuteImageFluxAPI()" style="endArrow=classic;html=1;exitX=0.5;exitY=1;entryX=0;entryY=0.5;" edge="1" parent="1" source="channel" target="core">
+          <mxGeometry width="50" height="50" relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge_cloudflare_core" value="ExecuteImageFluxAPI()&#10;(from GetKey)" style="endArrow=classic;html=1;exitX=0.5;exitY=1;entryX=1;entryY=0.5;" edge="1" parent="1" source="cloudflare" target="core">
+          <mxGeometry width="50" height="50" relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge_cloudflare_kv" value="HTTP PUT" style="endArrow=classic;html=1;exitX=1;exitY=0.5;entryX=0.16;entryY=0.55;" edge="1" parent="1" source="cloudflare" target="kv">
+          <mxGeometry width="50" height="50" relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge_core_imageflux" value="HTTP POST" style="endArrow=classic;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="core" target="imageflux">
+          <mxGeometry width="50" height="50" relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="edge_core_keysjson" value="Read / Write" style="endArrow=classic;startArrow=classic;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="core" target="keysjson">
+          <mxGeometry width="50" height="50" relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

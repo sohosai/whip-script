@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/andreykaipov/goobs"
 	obsconfig "github.com/andreykaipov/goobs/api/requests/config"
@@ -110,24 +111,63 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to parse SoraURL: %v", err)
 	}
+	whipServer := "https://" + parsedURL + "/whip/" + ChannelId
+	core.Log(fmt.Sprintf("WHIP endpoint: %s\n", whipServer))
 
 	WHIP := string("whip_custom")
 	res, err := client.Config.SetStreamServiceSettings(&obsconfig.SetStreamServiceSettingsParams{
 		StreamServiceType: &WHIP,
 		StreamServiceSettings: &typedefs.StreamServiceSettings{
-			Server: "https://" + parsedURL + "/whip/" + ChannelId,
+			Server: whipServer,
 		},
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 	fmt.Printf("SetStreamServiceSettings response: %+v\n", res)
+	serviceSettings, err := client.Config.GetStreamServiceSettings(&obsconfig.GetStreamServiceSettingsParams{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	serverSetting := ""
+	keySetting := ""
+	if serviceSettings.StreamServiceSettings != nil {
+		serverSetting = serviceSettings.StreamServiceSettings.Server
+		keySetting = serviceSettings.StreamServiceSettings.Key
+	}
+	fmt.Printf("Current stream service: type=%s server=%s key=%s\n",
+		serviceSettings.StreamServiceType,
+		serverSetting,
+		keySetting,
+	)
 
 	res2, err := client.Stream.StartStream(&stream.StartStreamParams{})
 	if err != nil {
 		log.Fatal(err)
 	}
 	fmt.Printf("StartStream response: %+v\n", res2)
+	streamActive := false
+	for range 8 {
+		status, err := client.Stream.GetStreamStatus(&stream.GetStreamStatusParams{})
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Stream status: active=%t reconnecting=%t bytes=%.0f totalFrames=%.0f skippedFrames=%.0f\n",
+			status.OutputActive,
+			status.OutputReconnecting,
+			status.OutputBytes,
+			status.OutputTotalFrames,
+			status.OutputSkippedFrames,
+		)
+		if status.OutputActive {
+			streamActive = true
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
+	if !streamActive {
+		log.Fatal("OBS stream output is not active after StartStream; check OBS WHIP output settings and network reachability to ImageFlux")
+	}
 
 	m3u8Url, err := channel.GetPlaylist(ChannelId, imagefluxToken)
 	if err != nil {
