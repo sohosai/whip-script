@@ -6,4 +6,9 @@ config.toml
 
 .DS_Store
 
-keys.json
+*.json
+
+serviceAccount.json
+
+*.txt
+

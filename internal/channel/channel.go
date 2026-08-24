@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/sohosai/whip-script/internal/core"
@@ -85,6 +89,104 @@ func GetPlaylist(channelID, token string) (string, error) {
 			backoff += 1 * time.Second
 		}
 	}
+}
+
+func GetKey(urlString string, authToken string) (string, string, error) {
+	req, err := http.NewRequest(http.MethodGet, urlString, nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("Content-Type", "application/vnd.apple.mpegurl")
+
+	client := &http.Client{}
+	res, err := client.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer res.Body.Close()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		core.ErrorLog(err.Error())
+	}
+
+	var indexURL string
+	for _, line := range strings.Split(string(body), "\n") {
+		if strings.HasPrefix(line, "http") {
+			indexURL = strings.Trim(line, "\r\n ")
+			break
+		}
+	}
+	core.Log(fmt.Sprintf(`
+****************************************************
+indexUrl: %v
+****************************************************
+
+`, indexURL))
+
+	req, err = http.NewRequest(http.MethodGet, indexURL, nil)
+	if err != nil {
+		core.ErrorLog(err.Error())
+		return "", "", err
+	}
+	req.Header.Set("Content-Type", "application/vnd.apple.mpegurl")
+
+	res, err = client.Do(req)
+	if err != nil {
+		core.ErrorLog(err.Error())
+		return "", "", err
+	}
+	defer res.Body.Close()
+
+	body, err = io.ReadAll(res.Body)
+	if err != nil {
+		core.ErrorLog(err.Error())
+		return "", "", err
+	}
+	dataForKid := string(body)
+
+	lines := strings.Split(dataForKid, "\n")
+	var kid string
+	for _, line := range lines {
+		if strings.HasPrefix(line, "#EXT-X-KEY") {
+			rawURI := strings.Split(strings.Split(line, `URI="`)[1], `"`)[0]
+			parsedURL, err := url.Parse(rawURI)
+			if err != nil {
+				return "", "", err
+			}
+			kid = parsedURL.Query().Get("kid")
+			break
+		}
+	}
+
+	if kid == "" {
+		return "", "", nil
+	}
+
+	keyRequestBody, err := json.Marshal(map[string]string{"kid": kid})
+	if err != nil {
+		return "", "", err
+	}
+	r := core.RequestPayload{
+		Target:     "ImageFlux_20200707.GetEncryptKey",
+		Body:       bytes.NewBuffer(keyRequestBody),
+		Auth_token: authToken,
+	}
+
+	body, err = r.ExecuteImageFluxAPI()
+	if err != nil {
+		return "", "", err
+	}
+
+	type EncryptKeyResponse struct {
+		EncryptKey string `json:"encrypt_key"`
+	}
+	var keyResponse EncryptKeyResponse
+	if err := json.Unmarshal(body, &keyResponse); err != nil {
+		return "", "", err
+	}
+
+	return keyResponse.EncryptKey, indexURL, nil
 }
 
 func CreateChannels(i core.ImagefluxConfig, reqtoken string) (ChannelId string, SoraURL string) {
