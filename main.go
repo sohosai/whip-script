@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"github.com/sohosai/whip-script/internal/channel"
 	"github.com/sohosai/whip-script/internal/cloudflare"
 	"github.com/sohosai/whip-script/internal/core"
+	"github.com/sohosai/whip-script/internal/redis"
 	"github.com/urfave/cli/v2"
 )
 
@@ -88,6 +90,18 @@ func main() {
 		log.Fatal(err)
 	}
 
+	redisClient, err := redis.NewClient(os.Getenv("REDIS_ADDR"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer redisClient.Close()
+
+	err = redisClient.Ping(context.Background())
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	_ = patliteEnabled
 
 	client, err := goobs.New(url, goobs.WithPassword(password))
@@ -136,10 +150,20 @@ func main() {
 
 	err = cloudflare.PutKv(os.Getenv("HLS_VALUE_PREFIX"), m3u8Url, config)
 	if err != nil {
-		core.ErrorLog(err.Error())
+		core.ErrorLog("m3u8 URLのKVへの送信に失敗しました。: ", err.Error())
 		return
 	}
 	core.Log("m3u8 URLをKVに送信しました。\n")
+
+	//RedisへのURL保存
+	err = redisClient.Set(context.Background(), os.Getenv("HLS_VALUE_PREFIX"), m3u8Url)
+	if err != nil {
+		core.ErrorLog("m3u8 URLのRedisへの送信に失敗しました。: ", err.Error())
+	} else {
+		core.Log("m3u8 URLをRedisに送信しました。\n")
+	}
+	//
+
 	encryptionKey, indexURL, err := cloudflare.GetKey(m3u8Url, imagefluxToken)
 	_ = indexURL
 	if err != nil {
@@ -152,11 +176,19 @@ func main() {
 	}
 	err = cloudflare.PutKv(os.Getenv("HLS_KEY_PREFIX"), encryptionKey, config)
 	if err != nil {
-		core.ErrorLog(err.Error())
+		core.ErrorLog("encryption KeyのKVへの送信に失敗しました: ", err.Error())
 		return
 	}
-
 	core.Log("encryption KeyをKVに送信しました。\n")
+
+	// RedisへのencryptionKey保存
+	err = redisClient.Set(context.Background(), os.Getenv("HLS_KEY_PREFIX"), encryptionKey)
+	if err != nil {
+		core.ErrorLog("encryption KeyのRedisへの送信に失敗しました: ", err.Error())
+	} else {
+		core.Log("encryption KeyをRedisに送信しました。\n")
+	}
+	//
 
 	prev, err := core.ReadKeyBackup("keys.json")
 	if err != nil {

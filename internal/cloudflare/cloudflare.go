@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+
 	"net/http"
 	"net/url"
 	"strings"
@@ -140,7 +141,7 @@ indexUrl: %v
 	}
 
 	if kid == "" {
-		return "", "", nil
+		return "", indexUrl, fmt.Errorf("kidがプレイリストから取得できませんでした")
 	}
 
 	// POSTリクエストを実行してキーを取得
