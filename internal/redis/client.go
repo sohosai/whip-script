@@ -2,6 +2,8 @@ package redis
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	redislib "github.com/redis/go-redis/v9"
 )
@@ -11,6 +13,10 @@ type Client struct {
 }
 
 func NewClient(addr string) (*Client, error) {
+    addr = strings.TrimSpace(addr)
+    if addr == "" {
+        return nil, fmt.Errorf("redis: アドレスが空です。")
+    }
 	raw := redislib.NewClient(&redislib.Options{
 		Addr: addr,
 	})
