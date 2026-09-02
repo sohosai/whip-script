@@ -12,8 +12,8 @@ import (
 	"github.com/andreykaipov/goobs/api/requests/stream"
 	"github.com/andreykaipov/goobs/api/typedefs"
 	"github.com/sohosai/whip-script/internal/channel"
-	"github.com/sohosai/whip-script/internal/cloudflare"
 	"github.com/sohosai/whip-script/internal/core"
+	"github.com/sohosai/whip-script/internal/imageflux"
 	"github.com/sohosai/whip-script/internal/ingest"
 	"github.com/urfave/cli/v2"
 )
@@ -151,29 +151,17 @@ func main() {
 		log.Fatalf("failed to get Playlist: %v", err)
 	}
 
-	err = cloudflare.PutKv(os.Getenv("HLS_VALUE_PREFIX"), m3u8Url, config)
-	if err != nil {
-		core.ErrorLog(err.Error())
-		return
-	}
-	core.Log("m3u8 URLをKVに送信しました。\n")
-	encryptionKey, indexURL, err := cloudflare.GetKey(m3u8Url, imagefluxToken)
+	core.Log("m3u8 URLを取得しました。\n")
+	encryptionKey, indexURL, err := imageflux.GetEncryptionKey(m3u8Url, imagefluxToken)
 	_ = indexURL
 	if err != nil {
-		core.ErrorLog(err.Error())
-		return
+		log.Fatalf("HLSプレイリストから暗号鍵を取得できませんでした: %v", err)
 	}
 	if encryptionKey == "" {
-		core.ErrorLog("暗号鍵がプレイリストから取得できませんでした。")
-		return
-	}
-	err = cloudflare.PutKv(os.Getenv("HLS_KEY_PREFIX"), encryptionKey, config)
-	if err != nil {
-		core.ErrorLog(err.Error())
-		return
+		log.Fatalf("暗号鍵がプレイリストから取得できませんでした。")
 	}
 
-	core.Log("encryption KeyをKVに送信しました。\n")
+	core.Log("暗号鍵をプレイリストから取得しました。\n")
 
 	err = ingest.Send(
 		context.Background(),
@@ -186,10 +174,10 @@ func main() {
 		},
 	)
 	if err != nil {
-		core.ErrorLog("配信情報のlive2025-serverへの送信に失敗しました: ", err.Error())
-	} else {
-		core.Log("配信情報をlive2025-serverへ送信しました。\n")
+		log.Fatalf("配信情報のlive2025-serverへの送信に失敗しました: %v", err)
 	}
+
+	core.Log("配信情報をlive2025-serverへ送信しました。\n")
 
 	prev, err := core.ReadKeyBackup("keys.json")
 	if err != nil {
@@ -205,7 +193,7 @@ func main() {
 	if err := core.BackupKey("keys.json", ChannelId, encryptionKey); err != nil {
 		core.ErrorLog("failed to write key backup: ", err.Error())
 	} else {
-		core.Log("encryption Keyをローカルバックアップ(keys.json)に保存しました。\n")
+		core.Log("暗号鍵をローカルバックアップ(keys.json)に保存しました。\n")
 	}
 
 	core.Log("セットアップが終了しました。\n")
