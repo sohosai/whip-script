@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/andreykaipov/goobs"
 	obsconfig "github.com/andreykaipov/goobs/api/requests/config"
@@ -12,6 +14,7 @@ import (
 	"github.com/sohosai/whip-script/internal/channel"
 	"github.com/sohosai/whip-script/internal/cloudflare"
 	"github.com/sohosai/whip-script/internal/core"
+	"github.com/sohosai/whip-script/internal/ingest"
 	"github.com/urfave/cli/v2"
 )
 
@@ -90,6 +93,20 @@ func main() {
 
 	_ = patliteEnabled
 
+	streamIngestURL := strings.TrimSpace(os.Getenv("STREAM_INGEST_URL"))
+	streamIngestToken := strings.TrimSpace(os.Getenv("STREAM_INGEST_TOKEN"))
+	streamChannelID := strings.TrimSpace(os.Getenv("STREAM_CHANNEL_ID"))
+
+	if streamIngestURL == "" {
+		log.Fatal("STREAM_INGEST_URL is empty")
+	}
+	if streamIngestToken == "" {
+		log.Fatal("STREAM_INGEST_TOKEN is empty")
+	}
+	if streamChannelID == "" {
+		log.Fatal("STREAM_CHANNEL_ID is empty")
+	}
+
 	client, err := goobs.New(url, goobs.WithPassword(password))
 	if err != nil {
 		log.Fatal(err)
@@ -157,6 +174,22 @@ func main() {
 	}
 
 	core.Log("encryption KeyをKVに送信しました。\n")
+
+	err = ingest.Send(
+		context.Background(),
+		streamIngestURL,
+		streamIngestToken,
+		ingest.StreamCredentials{
+			ChannelID:     streamChannelID,
+			LiveURL:       m3u8Url,
+			EncryptionKey: encryptionKey,
+		},
+	)
+	if err != nil {
+		core.ErrorLog("配信情報のlive2025-serverへの送信に失敗しました: ", err.Error())
+	} else {
+		core.Log("配信情報をlive2025-serverへ送信しました。\n")
+	}
 
 	prev, err := core.ReadKeyBackup("keys.json")
 	if err != nil {

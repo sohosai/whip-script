@@ -9,8 +9,9 @@ OBSからImageFlux Live StreamingへWHIP配信を開始するためのセット�
 3. OBS WebSocket経由でWHIP配信先を設定し、配信を開始する
 4. HLSプレイリストの生成を最大30秒待つ
 5. プレイリストURLと暗号鍵をCloudflare KVへ保存する
-6. 前回記録したImageFluxチャンネルがあれば削除する
-7. `keys.json` に今回のチャンネルIDと暗号鍵を追記する
+6. 同じプレイリストURLと暗号鍵をlive2025-serverへ送信する
+7. 前回記録したImageFluxチャンネルがあれば削除する
+8. `keys.json` に今回のチャンネルIDと暗号鍵を追記する
 
 このプログラムは常駐監視ではなく、セットアップ完了後に終了します。OBSの配信停止はOBS側で行ってください。
 
@@ -21,6 +22,7 @@ OBSからImageFlux Live StreamingへWHIP配信を開始するためのセット�
 - OBS側で使用可能な映像・音声ソース
 - ImageFlux Live StreamingのAPIトークン
 - Cloudflare KVのAPIトークン、アカウントID、Namespace ID
+- 配信情報の登録先となるlive2025-serverと、その送信用トークン
 - Dockerで実行する場合はDocker EngineとDocker Compose
 - ホストで直接実行する場合はGoツールチェーン
 
@@ -30,13 +32,13 @@ OBSでWebSocketサーバーを有効にし、ポートとパスワードを控�
 
 ### `.env.local`
 
-`example.env` をコピーして作成します。
+`.env.example` をコピーして作成します。
 
 ```sh
-cp example.env .env.local
+cp .env.example .env.local
 ```
 
-実装が参照する環境変数は次の4つです。
+実装が参照する環境変数は次の7つです。
 
 | 変数 | 用途 |
 | --- | --- |
@@ -44,8 +46,11 @@ cp example.env .env.local
 | `OBS_WEBSOCKET_PASSWORD` | OBS WebSocketのパスワード |
 | `HLS_VALUE_PREFIX` | HLSプレイリストURLを書き込むCloudflare KVキー |
 | `HLS_KEY_PREFIX` | HLS暗号鍵を書き込むCloudflare KVキー |
+| `STREAM_INGEST_URL` | 配信情報を登録するlive2025-serverのAPI URL |
+| `STREAM_INGEST_TOKEN` | live2025-serverと共有する送信用トークン |
+| `STREAM_CHANNEL_ID` | live2025-serverで使用する固定チャンネル名（`uni`、`1A`、`kaikan`、`burari`） |
 
-`example.env` にHLS用の2変数がない場合は追記してください。ImageFluxのトークンは環境変数ではなく、後述する `config.toml` の `imageflux.token` に設定します。
+`HLS_VALUE_PREFIX` と `HLS_KEY_PREFIX` は保存するURLや暗号鍵そのものではなく、Cloudflare KV上の保存先キー名です。`STREAM_CHANNEL_ID` はImageFluxが実行ごとに発行するチャンネルIDではなく、live2025-serverで使用する固定名を指定します。ImageFluxのトークンは環境変数ではなく、後述する `config.toml` の `imageflux.token` に設定します。
 
 Dockerコンテナからホスト上のOBSへ接続する場合、`OBS_WEBSOCKET_URL` には通常 `host.docker.internal:4455` を指定します。`docker-compose.yaml` がLinux向けのホスト名解決を追加します。
 
