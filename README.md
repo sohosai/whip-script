@@ -1,16 +1,17 @@
 # whip-script
 
-OBSからImageFlux Live StreamingへWHIP配信を開始するためのセットアップツールです。実行するとImageFluxの配信チャンネルを作成し、OBSの配信先を設定して配信を開始します。その後、HLSプレイリストURLと暗号鍵をCloudflare KVへ保存します。
+OBSからImageFlux Live StreamingへWHIP配信を開始するためのセットアップツールです。実行するとImageFluxの配信チャンネルを作成し、OBSの配信先を設定して配信を開始します。その後、HLSプレイリストURLと暗号鍵をlive2025-serverの内部APIへ送信します。
 
 ## 実行時の流れ
 
 1. `config.toml` を読み込む
 2. ImageFluxにマルチストリームチャンネルを作成する
 3. OBS WebSocket経由でWHIP配信先を設定し、配信を開始する
-4. HLSプレイリストの生成を最大30秒待つ
-5. プレイリストURLと暗号鍵をCloudflare KVへ保存する
-6. 前回記録したImageFluxチャンネルがあれば削除する
-7. `keys.json` に今回のチャンネルIDと暗号鍵を追記する
+4. HLSプレイリストの生成を待ち、プレイリストURLを取得する
+5. HLSプレイリストとImageFlux APIから暗号鍵を取得する
+6. URLと暗号鍵をlive2025-serverの内部APIへ送信する
+7. 前回記録したImageFluxチャンネルがあれば削除する
+8. `keys.json` に今回のチャンネルIDと暗号鍵を追記する
 
 このプログラムは常駐監視ではなく、セットアップ完了後に終了します。OBSの配信停止はOBS側で行ってください。
 
@@ -20,7 +21,7 @@ OBSからImageFlux Live StreamingへWHIP配信を開始するためのセット�
 - OBS WebSocket（OBS 28以降では標準搭載）
 - OBS側で使用可能な映像・音声ソース
 - ImageFlux Live StreamingのAPIトークン
-- Cloudflare KVのAPIトークン、アカウントID、Namespace ID
+- 配信情報の登録先となるlive2025-serverと、その送信用トークン
 - Dockerで実行する場合はDocker EngineとDocker Compose
 - ホストで直接実行する場合はGoツールチェーン
 
@@ -30,22 +31,23 @@ OBSでWebSocketサーバーを有効にし、ポートとパスワードを控�
 
 ### `.env.local`
 
-`example.env` をコピーして作成します。
+`.env.example` をコピーして作成します。
 
 ```sh
-cp example.env .env.local
+cp .env.example .env.local
 ```
 
-実装が参照する環境変数は次の4つです。
+実装が参照する環境変数は次の5つです。
 
 | 変数 | 用途 |
 | --- | --- |
 | `OBS_WEBSOCKET_URL` | OBS WebSocketの接続先。ホスト実行時の例は `localhost:4455` |
 | `OBS_WEBSOCKET_PASSWORD` | OBS WebSocketのパスワード |
-| `HLS_VALUE_PREFIX` | HLSプレイリストURLを書き込むCloudflare KVキー |
-| `HLS_KEY_PREFIX` | HLS暗号鍵を書き込むCloudflare KVキー |
+| `STREAM_INGEST_URL` | 配信情報を登録するlive2025-serverのAPI URL |
+| `STREAM_INGEST_TOKEN` | live2025-serverと共有する送信用トークン |
+| `STREAM_CHANNEL_ID` | live2025-serverで使用する固定チャンネル名（`uni`、`1A`、`kaikan`、`burari`） |
 
-`example.env` にHLS用の2変数がない場合は追記してください。ImageFluxのトークンは環境変数ではなく、後述する `config.toml` の `imageflux.token` に設定します。
+`STREAM_CHANNEL_ID` はImageFluxが実行ごとに発行する配信用IDではなく、live2025-serverが認識する固定チャンネル名です。ImageFluxのトークンは環境変数ではなく、後述する `config.toml` の `imageflux.token` に設定します。
 
 Dockerコンテナからホスト上のOBSへ接続する場合、`OBS_WEBSOCKET_URL` には通常 `host.docker.internal:4455` を指定します。`docker-compose.yaml` がLinux向けのホスト名解決を追加します。
 
@@ -65,10 +67,9 @@ cp example.toml config.toml
 | `imageflux.encrypt-key-uri` | HLS暗号鍵取得先URI |
 | `imageflux.event_webhook_url` | ImageFluxイベント通知先URL |
 | `imageflux.hls` | 解像度、FPS、映像・音声ビットレートなどのHLS出力設定 |
-| `cloudflare.token` | Cloudflare KV書き込み用APIトークン |
-| `cloudflare.kv-account-id` | CloudflareアカウントID |
-| `cloudflare.kv-namespace-id` | 書き込み先KV Namespace ID |
 | `patlite.IP` | パトライトのIP。現在の処理では未使用 |
+
+暗号化されたHLSを使用する場合、`imageflux.encrypt-key-uri` には、配信するチャンネルに対応したBackendのHTTPS URLを指定します。たとえば `uni` では `https://<live-server>/key/uni` です。
 
 ### `keys.json`
 
@@ -89,7 +90,7 @@ chmod 600 keys.json
 docker compose build streamer
 ```
 
-現在のログ実装はCloudflare APIトークンを出力し得るため、通常は `--nolog` を付けて実行します。処理が正常終了するとコンテナも終了します。
+`--nolog` を付けると、ツール独自のログ（HLS URLを含む可能性があります）を抑止できます。処理が正常終了するとコンテナも終了します。
 
 ```sh
 docker compose run --rm streamer /app/streamer --nolog
@@ -137,8 +138,8 @@ go run . --help
 - 実行するとOBSの配信設定を変更し、そのまま配信を開始します。
 - HLSプレイリストが30秒以内に取得できない場合はエラー終了します。
 - 前回のチャンネル削除は `keys.json` の最後の記録を基準にします。このファイルを失うと自動削除できません。
-- Cloudflare KVへ保存する暗号鍵は機密情報です。ログ、設定ファイル、バックアップの取り扱いに注意してください。
-- 現在のログ実装はCloudflare APIトークンを出力し得るため、共有ログを残す環境では必ず `--nolog` を指定してください。
+- `STREAM_INGEST_TOKEN`、ImageFluxトークン、暗号鍵は機密情報です。ログ、設定ファイル、バックアップの取り扱いに注意してください。
+- Backend APIへの送信に失敗した場合はエラー終了し、後続の旧チャンネル削除と `keys.json` 更新は実行されません。
 
 ## 開発用コマンド
 

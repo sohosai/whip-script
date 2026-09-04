@@ -2,7 +2,6 @@ package core
 
 type Config struct {
 	Imageflux  ImagefluxConfig  `toml:"imageflux"`
-	Cloudflare CloudflareConfig `toml:"cloudflare"`
 	Patlite    PatliteConfig    `toml:"patlite"`
 }
 
@@ -32,15 +31,6 @@ type HlsConfig struct {
 	Archive struct {
 		ArchiveDestinationId string `json:"archive_destination_id" toml:"archive_destination_id"`
 	} `json:"archive" toml:"archive"`
-}
-
-type CloudflareConfig struct {
-	// API token for Cloudflare
-	Token string `toml:"token"`
-	// Cloudflare KV Account ID
-	KvAccountID string `toml:"kv-account-id"`
-	// Cloudflare KV Namespace ID
-	KvNamespaceID string `toml:"kv-namespace-id"`
 }
 
 type HLS struct {

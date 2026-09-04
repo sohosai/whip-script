@@ -54,10 +54,5 @@ bps = 96000
 [ imageflux.hls.archive ]
 archive_destination_id=""
 
-[cloudflare]
-token = ""
-kv-account-id = ""
-kv-namespace-id = ""
-
 [patlite]
 IP = "192.168.10.1"
