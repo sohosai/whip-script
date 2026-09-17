@@ -6,16 +6,16 @@ event_webhook_url=""
 # 1080p
 [[ imageflux.hls ]]
 duration-seconds = 1
-start-time-offset = -2
+start-time-offset = -10
 
 [ imageflux.hls.video ]
 width = 1920
 height = 1080
-fps = 60
-bps = 15000000
+fps = 30
+bps = 12000000
 
 [ imageflux.hls.audio ]
-bps = 320000
+bps = 160000
 
 [ imageflux.hls.archive ]
 archive_destination_id=""
@@ -23,13 +23,13 @@ archive_destination_id=""
 # 720p
 [[ imageflux.hls ]]
 duration-seconds = 1
-start-time-offset = -2
+start-time-offset = -10
 
 [ imageflux.hls.video ]
 width = 1280
 height = 720
-fps = 60
-bps = 2500000
+fps = 30
+bps = 4000000
 
 [ imageflux.hls.audio ]
 bps = 128000
@@ -40,13 +40,13 @@ archive_destination_id=""
 # 480p
 [[ imageflux.hls ]]
 duration-seconds = 1
-start-time-offset = -2
+start-time-offset = -10
 
 [ imageflux.hls.video ]
 width = 854
 height = 480
-fps = 24
-bps = 950000
+fps = 30
+bps = 1200000
 
 [ imageflux.hls.audio ]
 bps = 96000
