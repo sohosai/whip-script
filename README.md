@@ -45,7 +45,7 @@ cp .env.example .env.local
 | `OBS_WEBSOCKET_PASSWORD` | OBS WebSocketのパスワード |
 | `STREAM_INGEST_URL` | 配信情報を登録するlive2025-serverのAPI URL |
 | `STREAM_INGEST_TOKEN` | live2025-serverと共有する送信用トークン |
-| `STREAM_CHANNEL_ID` | live2025-serverで使用する固定チャンネル名（`uni`、`1A`、`kaikan`、`burari`） |
+| `STREAM_CHANNEL_ID` | live2025-serverで使用する固定チャンネル名（`uni`、`1A`、`kaikan`） |
 
 `STREAM_CHANNEL_ID` はImageFluxが実行ごとに発行する配信用IDではなく、live2025-serverが認識する固定チャンネル名です。ImageFluxのトークンは環境変数ではなく、後述する `config.toml` の `imageflux.token` に設定します。
 
